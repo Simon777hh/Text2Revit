@@ -1,0 +1,48 @@
+{
+  "doors": 9,
+  "total_area_m2": 106.20474534180914,
+  "windows": 4,
+  "passed": true,
+  "rooms": [
+    {
+      "name": "Living",
+      "area_m2": 40.65026607174516
+    },
+    {
+      "name": "Kitchen",
+      "area_m2": 8.913632532087538
+    },
+    {
+      "name": "Bedroom",
+      "area_m2": 13.174070683196375
+    },
+    {
+      "name": "Bedroom",
+      "area_m2": 17.510434161444746
+    },
+    {
+      "name": "Bedroom",
+      "area_m2": 11.783715634798751
+    },
+    {
+      "name": "Bathroom",
+      "area_m2": 3.159301528473246
+    },
+    {
+      "name": "Bathroom",
+      "area_m2": 2.167560082441208
+    },
+    {
+      "name": "Balcony",
+      "area_m2": 2.49354108132018
+    },
+    {
+      "name": "Balcony",
+      "area_m2": 6.352223566301925
+    }
+  ],
+  "revit_version": "2022",
+  "railings": 5,
+  "walls": 28,
+  "area_notes": 10
+}

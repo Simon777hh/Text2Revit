@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RevitVersion Condition="'$(RevitVersion)' == ''">2022</RevitVersion>
+    <TargetFramework Condition="'$(RevitVersion)' == '2020'">net47</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)' &gt;= '2021' And '$(RevitVersion)' &lt;= '2024'">net48</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)' &gt;= '2025'">net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms><UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion><PlatformTarget>x64</PlatformTarget>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\$(Configuration)\$(RevitVersion)\</OutputPath>
+    <DefineConstants>$(DefineConstants);REVIT$(RevitVersion)</DefineConstants>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
+    <RevitInstallDir Condition="'$(RevitInstallDir)' == ''">C:\Program Files\Autodesk\Revit $(RevitVersion)</RevitInstallDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" Link="Services\%(Filename)%(Extension)" />
+    <Reference Include="System.Runtime.Serialization" Condition="'$(RevitVersion)' &lt;= '2024'" />
+    <Reference Include="RevitAPI"><HintPath>$(RevitInstallDir)\RevitAPI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="RevitAPIUI"><HintPath>$(RevitInstallDir)\RevitAPIUI.dll</HintPath><Private>false</Private></Reference>
+    <EmbeddedResource Include="Resources\*.png" />
+  </ItemGroup>
+</Project>

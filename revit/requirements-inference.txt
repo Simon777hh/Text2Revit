@@ -1,0 +1,6 @@
+# Exact versions used to build the tested Windows x64 distribution.
+torch==2.11.0
+transformers==5.14.1
+numpy==2.4.4
+shapely==2.1.2
+matplotlib==3.11.0

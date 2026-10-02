@@ -1,0 +1,8 @@
+-r requirements.txt
+networkx
+geopandas
+opencv-python
+scipy
+scikit-image
+pillow
+requests

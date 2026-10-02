@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net47</TargetFramework><OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms><LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget><AssemblyName>Text2Revit.Setup</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="..\Shared\*.cs" Link="%(Filename)%(Extension)" /><Reference Include="System.IO.Compression" /><Reference Include="System.IO.Compression.FileSystem" /><Reference Include="System.Runtime.Serialization" /></ItemGroup>
+</Project>

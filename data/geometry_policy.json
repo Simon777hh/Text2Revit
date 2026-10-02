@@ -1,0 +1,6 @@
+{
+  "minimum_room_areas_m2": {
+    "kitchen": 2.0,
+    "bathroom": 2.0
+  }
+}
