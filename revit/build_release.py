@@ -1,4 +1,4 @@
-"""Build one offline Windows installer from this repository.
+"""Build a Windows installer, optionally with online release data attachments.
 Run Build-Release.cmd, or python build_release.py --python PATH.
 All downloads and build products stay inside revit/.
 """
@@ -118,11 +118,102 @@ def runtime(python: Path):
     stamp.write_text(json.dumps(signature),encoding="utf-8")
     return packed
 
-def assemble(stub: Path, plugins, modeldir: Path, packed: Path, version: str):
+def seven_zip():
+    """Use the public-domain extractor supplied by the official LZMA SDK."""
+    folder = TOOLS / "lzma"
+    exe = folder / "sdk/bin/x64/7zr.exe"
+    notice = folder / "sdk/DOC/lzma-sdk.txt"
+    if exe.is_file() and notice.is_file(): return exe, notice
+    base = "https://github.com/ip7z/7zip/releases/download/26.03/"
+    bootstrap = folder / "7zr-bootstrap.exe"
+    archive = folder / "lzma2603.7z"
+    download(base + "7zr.exe", bootstrap)
+    download(base + "lzma2603.7z", archive)
+    run([bootstrap, "x", archive, "-o" + str(folder / "sdk"), "-y", "-bso0", "-bsp0"])
+    if not exe.is_file() or not notice.is_file(): raise FileNotFoundError("Incomplete LZMA SDK")
+    return exe, notice
+
+def compress_environment(packed: Path, modeldir: Path):
+    """Compress original runtime/model files, rather than an existing ZIP."""
+    exe, notice = seven_zip()
+    stage = BUILD / "environment-source"
+    archive = BUILD / "environment.7z"
+    manifest = BUILD / "environment-files.json"
+    stamp = BUILD / "environment-source.json"
+    model_files = sorted(p for p in modeldir.rglob("*") if p.is_file() and p.name != "source.json")
+    signature = {"runtime": [str(packed.resolve()), packed.stat().st_size, packed.stat().st_mtime_ns],
+        "models": [[p.relative_to(modeldir).as_posix(), p.stat().st_size, p.stat().st_mtime_ns] for p in model_files],
+        "sdk": "26.03", "method": "LZMA2", "dictionary_mib": 128, "level": 9}
+    if archive.is_file() and manifest.is_file() and stamp.is_file() and json.loads(stamp.read_text(encoding="utf-8")) == signature:
+        return archive, manifest, exe, notice
+    stage.mkdir(parents=True, exist_ok=True)
+    print("Expanding the runtime for solid LZMA2 compression", flush=True)
+    unzip(packed, stage / "runtime")
+    for source in model_files:
+        target = stage / "models" / source.relative_to(modeldir)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+    records = []
+    # Only declared input files enter the archive; stale staging files are excluded.
+    with zipfile.ZipFile(packed) as z:
+        names = ["runtime/" + e.filename for e in z.infolist() if not e.is_dir()]
+    names += ["models/" + p.relative_to(modeldir).as_posix() for p in model_files]
+    for name in sorted(names):
+        path = stage / name
+        with path.open("rb") as stream: digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        records.append({"path": name, "size": path.stat().st_size, "sha256": digest})
+    manifest.write_text(json.dumps({"files": records}, separators=(",", ":")), encoding="utf-8")
+    listing = BUILD / "environment-files.txt"
+    listing.write_text("\n".join(sorted(names)) + "\n", encoding="utf-8")
+    temporary = BUILD / "environment.partial.7z"
+    if temporary.exists(): temporary.unlink()
+    print(f"Compressing {len(records)} original files with LZMA2", flush=True)
+    run([exe, "a", "-t7z", temporary, "@" + str(listing.resolve()), "-scsUTF-8",
+         "-mx=9", "-m0=LZMA2:d=128m", "-ms=on", "-mmt=2", "-bsp0"], cwd=stage)
+    run([exe, "t", temporary, "-bsp0"])
+    temporary.replace(archive)
+    stamp.write_text(json.dumps(signature), encoding="utf-8")
+    return archive, manifest, exe, notice
+
+def split_environment(archive: Path, release_url: str):
+    from urllib.parse import urlparse
+    if urlparse(release_url).scheme != "https": raise ValueError("The release download URL must use HTTPS")
+    DIST.mkdir(parents=True, exist_ok=True)
+    parts = []
+    digest = hashlib.sha256()
+    with archive.open("rb") as source:
+        index = 1
+        while source.tell() < archive.stat().st_size:
+            name = f"environment.7z.{index:03d}"
+            target = DIST / name
+            temporary = target.with_suffix(target.suffix + ".partial")
+            part_digest = hashlib.sha256()
+            size = 0
+            with temporary.open("wb") as output:
+                while size < 1536 * 1024**2:
+                    chunk = source.read(min(4 * 1024**2, 1536 * 1024**2 - size))
+                    if not chunk: break
+                    output.write(chunk);part_digest.update(chunk);digest.update(chunk);size += len(chunk)
+            temporary.replace(target)
+            parts.append({"name": name, "size": size, "sha256": part_digest.hexdigest(), "url": release_url.rstrip("/") + "/" + name})
+            print(f"Release data: {name} ({size / 1024**3:.2f} GiB)", flush=True)
+            index += 1
+    return {"size": archive.stat().st_size, "sha256": digest.hexdigest(), "parts": parts}
+
+def assemble(stub: Path, plugins, modeldir: Path, packed: Path, version: str, compression="7z", online_release_url=None):
+    if online_release_url and compression != "7z": raise ValueError("Online installers require LZMA2 compression")
+    environment = compress_environment(packed, modeldir) if compression == "7z" else None
+    remote = split_environment(environment[0], online_release_url) if online_release_url else None
     archive = BUILD / "payload.zip"
     required = ["runtime/python.exe", "backend/backend_cli.py", "models/flow_matching_best.pth", "models/clip/model.safetensors"]
     with zipfile.ZipFile(archive,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=5,allowZip64=True) as package:
-        package.write(packed,"runtime.zip",compress_type=zipfile.ZIP_STORED)
+        if environment:
+            compressed, inventory, extractor, notice = environment
+            if not remote: package.write(compressed, "environment.7z", compress_type=zipfile.ZIP_STORED)
+            package.write(inventory, "environment-files.json")
+            package.write(extractor, "tools/7zr.exe")
+            package.write(notice, "third_party/LZMA-SDK.txt")
+        else: package.write(packed,"runtime.zip",compress_type=zipfile.ZIP_STORED)
         for filename in BACKEND_FILES: package.write(PROJECT / filename,"backend/" + filename)
         for filename in DATA_FILES:
             source = PROJECT / "data" / filename
@@ -132,8 +223,9 @@ def assemble(stub: Path, plugins, modeldir: Path, packed: Path, version: str):
                     package.writestr("backend/data/"+filename,json.dumps(statistics,ensure_ascii=False))
                 else: package.write(source,"backend/data/" + filename)
             elif filename != "room_aspect_samples.npz": raise FileNotFoundError(source)
-        for source in modeldir.rglob("*"):
-            if source.is_file() and source.name != "source.json": package.write(source,"models/"+source.relative_to(modeldir).as_posix(),compress_type=zipfile.ZIP_STORED)
+        if not environment:
+            for source in modeldir.rglob("*"):
+                if source.is_file() and source.name != "source.json": package.write(source,"models/"+source.relative_to(modeldir).as_posix(),compress_type=zipfile.ZIP_STORED)
         for year,source in plugins:
             name=f"addin/{year}/Text2Revit.Addin.dll";required.append(name);package.write(source,name)
         for filename in ("guide.md","guide.zh.md"):
@@ -142,9 +234,12 @@ def assemble(stub: Path, plugins, modeldir: Path, packed: Path, version: str):
             package.write(PROJECT / filename, filename)
         for source in (PROJECT / "third_party").glob("*.txt"):
             package.write(source, "third_party/" + source.name)
-        with zipfile.ZipFile(packed) as environment:
-            peak_bytes=sum(e.file_size for e in environment.infolist())+sum(e.file_size for e in package.infolist())+1024**3
-        package.writestr("release.json",json.dumps({"version":version,"revit_versions":[y for y,_ in plugins],"required_files":required,"required_free_bytes":peak_bytes},ensure_ascii=False))
+        with zipfile.ZipFile(packed) as runtime_zip:
+            peak_bytes=sum(e.file_size for e in runtime_zip.infolist())+sum(p.stat().st_size for p in modeldir.rglob("*") if p.is_file())+sum(e.file_size for e in package.infolist())+1024**3
+        if remote: peak_bytes += 2 * remote["size"]
+        release = {"version":version,"revit_versions":[y for y,_ in plugins],"required_files":required,"required_free_bytes":peak_bytes,"environment_format":compression}
+        if remote: release["remote_environment"] = remote
+        package.writestr("release.json",json.dumps(release,ensure_ascii=False))
     DIST.mkdir(exist_ok=True)
     final = DIST / "Text2Revit-Setup.exe"
     temporary = final.with_suffix(".partial")
@@ -159,7 +254,9 @@ def assemble(stub: Path, plugins, modeldir: Path, packed: Path, version: str):
     temporary.replace(final)
     run([final,"--verify-only"])
     digest = hashlib.file_digest(final.open("rb"),"sha256").hexdigest()
-    (DIST / "SHA256.txt").write_text(digest + "  " + final.name + "\n",encoding="utf-8")
+    checksums = digest + "  " + final.name + "\n"
+    if remote: checksums += "".join(part["sha256"] + "  " + part["name"] + "\n" for part in remote["parts"])
+    (DIST / "SHA256.txt").write_text(checksums,encoding="utf-8")
     print(f"READY: {final}\nSize: {final.stat().st_size / 1024**3:.2f} GB",flush=True)
 
 def main():
@@ -168,8 +265,11 @@ def main():
     parser.add_argument("--checkpoint",type=Path)
     parser.add_argument("--years",nargs="+",type=int,default=list(VERSIONS))
     parser.add_argument("--plugins-only",action="store_true")
+    parser.add_argument("--compression", choices=("7z", "zip"), default="7z")
+    parser.add_argument("--online-release-url", help="HTTPS download prefix of the GitHub release hosting the data parts")
     args = parser.parse_args()
     if any(y not in VERSIONS for y in args.years): parser.error("Supported years: 2020–2026")
+    if args.online_release_url and args.compression != "7z": parser.error("Online installers require --compression 7z")
     for folder in (TOOLS,BUILD,DIST): folder.mkdir(exist_ok=True)
     env = os.environ.copy()
     for key in ("HTTP_PROXY","HTTPS_PROXY","ALL_PROXY"): env.pop(key,None)
@@ -188,6 +288,6 @@ def main():
     models(args.python,checkpoint,modeldir)
     packed=runtime(args.python)
     version="1.0.0-"+datetime.now().strftime("%Y%m%d%H%M%S")
-    assemble(ROOT/"Installer/bin/Release/net47/Text2Revit.Setup.exe",plugins,modeldir,packed,version)
+    assemble(ROOT/"Installer/bin/Release/net47/Text2Revit.Setup.exe",plugins,modeldir,packed,version,args.compression,args.online_release_url)
 
 if __name__=="__main__": main()

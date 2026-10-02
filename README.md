@@ -30,11 +30,11 @@ Window placement avoids the continuous exterior wall containing the entrance. Be
 
 ## Use in Revit
 
-1. Close Revit and run `Text2Revit-Setup.exe`, then select **Install**.
+1. Download `Text2Revit-Setup.exe` from the [Windows release](https://github.com/Simon777hh/Text2Revit/releases). Close Revit, run the installer and select **Install**.
 2. Start Revit, open a project floor plan and select **Text2Revit → Generate Model**.
 3. Enter a supported prompt and select **Generate**. The tool creates the model and opens its 3D view.
 
-The Windows installer bundles Python, PyTorch, CLIP and the trained model. No separate Python or Conda installation is required. Inference runs locally, uses a compatible NVIDIA GPU automatically and supports CPU fallback. Installation and inference do not require model downloads.
+The Windows online installer automatically downloads and installs Python, PyTorch, CLIP and the trained model. Only the setup EXE needs to be downloaded manually. Installation requires internet access; subsequent inference runs locally and offline, uses a compatible NVIDIA GPU automatically and supports CPU fallback. No separate Python or Conda installation is required. A complete offline installer can also be distributed separately.
 
 English is the default interface; Chinese is available in the installer and prompt dialog. Both interfaces use the same English prompt format.
 
@@ -61,7 +61,7 @@ The installer contains separate add-ins for **Revit 2020–2026** and registers 
 
 ## Run inference from source
 
-The locally verified environment is Windows x64 with Python 3.14 and PyTorch 2.11. Model weights are not included in the source repository. To run inference from source, provide a compatible trained checkpoint at `checkpoints/flow_matching_best.pth`, or pass its path with `--checkpoint`. The Windows installer already bundles the weights needed for Revit use.
+The locally verified environment is Windows x64 with Python 3.14 and PyTorch 2.11. Model weights are not included in the source repository. To run inference from source, provide a compatible trained checkpoint at `checkpoints/flow_matching_best.pth`, or pass its path with `--checkpoint`. The Windows installer supplies the weights needed for Revit use automatically.
 
 In a Python environment, run the following from the repository root:
 

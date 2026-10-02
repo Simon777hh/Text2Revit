@@ -37,6 +37,11 @@ contains local assets and preserved historical work and is not the upload root.
   graph. Historical source remains archived locally.
 * The installer manifest was restored and the installer successfully rebuilt.
   The release now includes the current backend, physical policies and notices.
+* Runtime and inference models are compressed from their original files using
+  LZMA2. The Windows online installer retrieves two release data attachments,
+  resumes partial downloads and checks their individual and combined hashes.
+  It validates all extracted files before initializing Python. Long-path file
+  access was corrected after a full trial exposed a deeply nested runtime path.
 
 ## Verification
 
@@ -49,14 +54,25 @@ contains local assets and preserved historical work and is not the upload root.
 | Native Revit 2022 construction and exports | Nine rooms, real doors/windows, open railings and room/total area notes |
 | Entrance facade / balcony bedroom / spacing checks | Accepted JSON passed |
 | Revit API targets | 2020–2026 DLLs compiled |
-| Offline installer | Payload hash and packaged source bytes verified |
-| Git publication | Fresh local source repository; weights excluded, inference weights bundled in installer |
+| Release payload and source | Payload hash, 32,696 runtime/model files, current backend and seven DLLs verified |
+| Installer extraction and download regressions | 10 checks passed, including long paths, traversal, integrity, resume and cache reuse |
+| Full online installation using local download fixtures | Production setup code and data installed successfully; Python/PyTorch/model health check and seven isolated add-in registrations passed |
+| Runtime CPU / NVIDIA checks | CPU and GPU health checks passed using the same packaged runtime/model files |
+| Release attachments | Setup EXE and both data parts verified against SHA256.txt; all four assets below 2 GiB |
+| Git publication | Source repository excludes weights and installers; inference weights supplied by release data |
 
 `sample/floorplan.png`, `sample/model3d.png`, `sample/plan.json` and
 `sample/model-metadata.json` describe one matching accepted layout. Detailed
 logs and generated RVT/build products are local assets, excluded from Git.
 
-The final installer is version `1.0.0-20261002211905`, 3,901,737,855 bytes.
+The current Windows online installer is version `1.0.0-20261002233122`,
+3,573,261 bytes (3.41 MiB). Its data attachments are 1,610,612,736 and
+1,001,222,741 bytes (1.50 and 0.93 GiB). The earlier complete ZIP installer was
+3.63 GiB; a complete LZMA2 comparison build was 2.44 GiB. Neither complete
+installer fits GitHub's 2 GiB per-asset limit. The online release uses tag
+`v1.0.0`; its attachment names and configured download URLs must agree.
+macOS and Linux installers are outside the first release's scope.
+
 The corrected native sample total is 106.2 m², with 28 wall segments. Prepared
 training data, downloaded CLIP and build caches were physically moved to the
 parent workspace's `_local_assets/` directory. The active sample RVT and loaded
@@ -83,6 +99,10 @@ parent Git history, original supplied checkpoint or unique dataset was deleted.
 * Native runtime verification covers Revit 2022. Other Revit versions compiled,
   but still need actual runtime testing. A clean external-PC install remains
   unverified. Binaries are unsigned.
+* The online install trial used a loopback HTTP fixture in isolated test mode,
+  with the production executable code and full data attachments unchanged.
+  Normal installation requires HTTPS. Public GitHub download and redirect
+  behavior must be checked after the release attachments are published.
 * NuGet's online vulnerability feed was unavailable during compilation
   (`NU1900` warnings). Successful builds do not establish a clean dependency
   vulnerability audit.

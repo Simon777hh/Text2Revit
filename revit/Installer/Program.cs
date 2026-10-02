@@ -5,6 +5,7 @@ using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
@@ -22,19 +23,52 @@ namespace Text2Revit.Installer
         [DataMember(Name="revit_versions")] public int[] RevitVersions { get; set; }
         [DataMember(Name="required_files")] public string[] RequiredFiles { get; set; }
         [DataMember(Name="required_free_bytes")] public long RequiredFreeBytes { get; set; }
+        [DataMember(Name="environment_format")] public string EnvironmentFormat { get; set; }
+        [DataMember(Name="remote_environment")] public RemoteEnvironment RemoteEnvironment { get; set; }
+    }
+    [DataContract] public sealed class DownloadPart
+    {
+        [DataMember(Name="name")] public string Name { get; set; }
+        [DataMember(Name="url")] public string Url { get; set; }
+        [DataMember(Name="size")] public long Size { get; set; }
+        [DataMember(Name="sha256")] public string Sha256 { get; set; }
+    }
+    [DataContract] public sealed class RemoteEnvironment
+    {
+        [DataMember(Name="parts")] public DownloadPart[] Parts { get; set; }
+        [DataMember(Name="size")] public long Size { get; set; }
+        [DataMember(Name="sha256")] public string Sha256 { get; set; }
+    }
+    [DataContract] public sealed class PackedFile
+    {
+        [DataMember(Name="path")] public string Path { get; set; }
+        [DataMember(Name="size")] public long Size { get; set; }
+        [DataMember(Name="sha256")] public string Sha256 { get; set; }
+    }
+    [DataContract] public sealed class EnvironmentInventory
+    {
+        [DataMember(Name="files")] public PackedFile[] Files { get; set; }
     }
     internal static class Program
     {
         const string RegistryPath=@"Software\Microsoft\Windows\CurrentVersion\Uninstall\Text2Revit";
-        static string Root=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Text2Revit");
-        static string Addins=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"Autodesk","Revit","Addins");
+        static string Root;
+        static string Addins;
+        static bool Testing;
+        static Program()
+        {
+            AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling",false);
+            AppContext.SetSwitch("Switch.System.IO.BlockLongPaths",false);
+            Root=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Text2Revit");
+            Addins=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"Autodesk","Revit","Addins");
+        }
         [STAThread] static void Main(string[] args)
         {
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
             try
             {
-                if (args.Length==2 && (args[0]=="--test-root" || args[0]=="--test-uninstall")) { Root=Path.GetFullPath(args[1]); Addins=Path.Combine(Root,"test-addins"); if(args[0]=="--test-uninstall") Uninstall(s=>Console.WriteLine(s),false); else Install(s=>Console.WriteLine(s),false); return; }
-                if (args.Contains("--verify-only")) { using (var stream=Payload()) using (var zip=new ZipArchive(stream,ZipArchiveMode.Read)) { ReadRelease(zip); foreach (var e in zip.Entries) SafePath(Root,e.FullName); } return; }
+                if (args.Length==2 && (args[0]=="--test-root" || args[0]=="--test-uninstall")) { Testing=true; Root=Path.GetFullPath(args[1]); Addins=Path.Combine(Root,"test-addins"); if(args[0]=="--test-uninstall") Uninstall(s=>Console.WriteLine(s),false); else Install(s=>Console.WriteLine(s),false); return; }
+                if (args.Contains("--verify-only")) { using (var stream=Payload()) using (var zip=new ZipArchive(stream,ZipArchiveMode.Read)) { var release=ReadRelease(zip); foreach (var e in zip.Entries) SafePath(Root,e.FullName); if(release.EnvironmentFormat=="7z") ReadInventory(zip,Root); } return; }
                 bool uninstall=args.Contains("--uninstall");
                 using (var form=new Form { Text=uninstall ? UiLanguage.Text("Uninstall Text2Revit","卸载 Text2Revit") : UiLanguage.Text("Install Text2Revit","安装 Text2Revit"),ClientSize=new Size(600,300),StartPosition=FormStartPosition.CenterScreen,
                     FormBorderStyle=FormBorderStyle.FixedDialog,MaximizeBox=false,Font=new Font("Segoe UI",10) })
@@ -42,7 +76,9 @@ namespace Text2Revit.Installer
                     var heading=new Label { Left=24,Top=24,Width=405,Height=38,Text=uninstall ? UiLanguage.Text("Uninstall Text2Revit","卸载 Text2Revit") : UiLanguage.Text("Text2Revit · Setup","Text2Revit · 自动安装"),Font=new Font(form.Font.FontFamily,17,FontStyle.Bold) };
                     var language=new ComboBox { Left=446,Top=31,Width=130,DropDownStyle=ComboBoxStyle.DropDownList };
                     language.Items.AddRange(new object[]{"English","中文"});language.SelectedIndex=UiLanguage.IsChinese?1:0;
-                    Func<string> introduction=()=>uninstall ? UiLanguage.Text("Removes the add-in and runtime. Generation records are kept.\nClose Revit before continuing.","将移除工具栏插件和运行环境，保留生成记录。请先关闭 Revit。") : UiLanguage.Text("Installs the Revit add-in, Python runtime and models automatically.\nSupports Revit 2020–2026. No Python configuration or file copying.\nClose Revit and allow at least 12 GB of free disk space.","自动安装 Revit 插件、Python 后端和模型。\n支持 Revit 2020–2026，无需配置 Python 或移动文件。\n请先关闭 Revit，并预留至少 12 GB 磁盘空间。");
+                    bool online=false;
+                    if(!uninstall) using(var stream=Payload()) using(var zip=new ZipArchive(stream,ZipArchiveMode.Read)) online=ReadRelease(zip).RemoteEnvironment!=null;
+                    Func<string> introduction=()=>uninstall ? UiLanguage.Text("Removes the add-in and runtime. Generation records are kept.\nClose Revit before continuing.","将移除工具栏插件和运行环境，保留生成记录。请先关闭 Revit。") : online ? UiLanguage.Text("Downloads and installs the Revit add-in, runtime and models.\nInternet is required for installation; inference then works offline.\nClose Revit and allow at least 12 GB of free disk space.","自动下载并安装 Revit 插件、运行环境和模型。\n安装需要联网，之后可以离线推理。\n请先关闭 Revit，并预留至少 12 GB 磁盘空间。") : UiLanguage.Text("Installs the Revit add-in, Python runtime and models automatically.\nSupports Revit 2020–2026. No Python configuration or file copying.\nClose Revit and allow at least 12 GB of free disk space.","自动安装 Revit 插件、Python 后端和模型。\n支持 Revit 2020–2026，无需配置 Python 或移动文件。\n请先关闭 Revit，并预留至少 12 GB 磁盘空间。");
                     var label=new Label { Left=24,Top=78,Width=552,Height=110,Text=introduction() };
                     var progress=new ProgressBar { Left=24,Top=195,Width=552,Height=20,Visible=false,Style=ProgressBarStyle.Marquee };
                     var button=new Button { Left=440,Top=242,Width=136,Height=36,Text=uninstall ? UiLanguage.Text("Uninstall","卸载") : UiLanguage.Text("Install","安装") };
@@ -66,7 +102,7 @@ namespace Text2Revit.Installer
                     Application.Run(form);
                 }
             }
-            catch (Exception error) { File.WriteAllText(Path.Combine(Path.GetTempPath(),"Text2Revit-setup-error.txt"),error.ToString());Environment.ExitCode=1; if (!args.Any(a=>a.StartsWith("--"))) MessageBox.Show(error.Message,UiLanguage.Text("Text2Revit Setup Failed","Text2Revit 安装失败")); }
+            catch (Exception error) { File.WriteAllText(Path.Combine(Path.GetTempPath(),"Text2Revit-setup-error.txt"),error.ToString());Console.Error.WriteLine(error.Message);Environment.ExitCode=1; if (!args.Any(a=>a.StartsWith("--"))) MessageBox.Show(error.Message,UiLanguage.Text("Text2Revit Setup Failed","Text2Revit 安装失败")); }
         }
         static void Install(Action<string> update,bool register)
         {
@@ -82,11 +118,17 @@ namespace Text2Revit.Installer
                 {
                     Directory.CreateDirectory(destination);
                     foreach (var entry in zip.Entries) Extract(entry,destination);
+                    if(release.RemoteEnvironment!=null) DownloadEnvironment(release,destination,update);
                     string runtime=Path.Combine(destination,"runtime");Directory.CreateDirectory(runtime);
                     update(UiLanguage.Text("Installing the Python runtime. This can take several minutes…","正在安装 Python 运行环境，可能需要几分钟…"));
-                    using (var packed=ZipFile.OpenRead(Path.Combine(destination,"runtime.zip")))
-                        foreach (var entry in packed.Entries) Extract(entry,runtime);
-                    File.Delete(Path.Combine(destination,"runtime.zip"));
+                    if (release.EnvironmentFormat=="7z")
+                        ExtractEnvironment(destination,ReadInventory(zip,destination),update);
+                    else
+                    {
+                        using (var packed=ZipFile.OpenRead(Path.Combine(destination,"runtime.zip")))
+                            foreach (var entry in packed.Entries) Extract(entry,runtime);
+                        File.Delete(Path.Combine(destination,"runtime.zip"));
+                    }
                     update(UiLanguage.Text("Initializing the Python runtime…","正在初始化 Python 环境…"));
                     string unpack=Path.Combine(runtime,"Scripts","conda-unpack-script.py");
                     if (!File.Exists(unpack)) unpack=Path.Combine(runtime,"Scripts","conda-unpack");
@@ -118,6 +160,13 @@ namespace Text2Revit.Installer
                         }
                     }
                     File.WriteAllText(Path.Combine(destination,"installed.txt"),DateTime.UtcNow.ToString("O"));
+                    if(release.RemoteEnvironment!=null)
+                    {
+                        string downloads=Path.Combine(Root,"downloads"),cache=SafePath(downloads,release.Version);
+                        try { if(Directory.Exists(cache)) DeleteOwned(cache,downloads); }
+                        catch(IOException) { }
+                        catch(UnauthorizedAccessException) { }
+                    }
                     update(UiLanguage.Text("Installation complete.","安装完成。"));
                 }
                 catch
@@ -139,6 +188,8 @@ namespace Text2Revit.Installer
             string releases=Path.Combine(Root,"releases");
             if (Directory.Exists(releases)) foreach (string folder in Directory.GetDirectories(releases)) DeleteOwned(folder,releases);
             if(register) Registry.CurrentUser.DeleteSubKeyTree(RegistryPath,false);
+            string downloads=Path.Combine(Root,"downloads");
+            if(Directory.Exists(downloads)) foreach(string folder in Directory.GetDirectories(downloads)) DeleteOwned(folder,downloads);
         }
         static void DeleteOwned(string directory,string allowedRoot)
         {
@@ -173,7 +224,142 @@ namespace Text2Revit.Installer
         {
             var entry=zip.GetEntry("release.json") ?? throw new InvalidDataException(UiLanguage.Text("The installer has no release manifest.","安装包没有发行信息。"));
             Release release;using (var stream=entry.Open()) release=(Release)new DataContractJsonSerializer(typeof(Release)).ReadObject(stream);
-            if (release==null || !Regex.IsMatch(release.Version ?? "","^[a-zA-Z0-9._-]+$") || release.RevitVersions==null || release.RequiredFiles==null || release.RevitVersions.Any(y=>y<2020||y>2026)) throw new InvalidDataException(UiLanguage.Text("Invalid release manifest.","发行信息无效。"));return release;
+            if (release==null || !Regex.IsMatch(release.Version ?? "","^[a-zA-Z0-9._-]+$") || release.RevitVersions==null || release.RequiredFiles==null || release.RevitVersions.Any(y=>y<2020||y>2026) || (release.EnvironmentFormat!=null && release.EnvironmentFormat!="zip" && release.EnvironmentFormat!="7z")) throw new InvalidDataException(UiLanguage.Text("Invalid release manifest.","发行信息无效。"));
+            if(release.RemoteEnvironment!=null)
+            {
+                var remote=release.RemoteEnvironment;
+                if(release.EnvironmentFormat!="7z" || remote.Parts==null || remote.Parts.Length==0 || remote.Parts.Length>1000 || remote.Size<=0 || !Regex.IsMatch(remote.Sha256 ?? "","^[a-f0-9]{64}$")) throw new InvalidDataException("Invalid download manifest.");
+                long total=0;var names=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach(var part in remote.Parts)
+                {
+                    Uri uri;
+                    if(part==null || !Regex.IsMatch(part.Name ?? "","^[a-zA-Z0-9][a-zA-Z0-9._-]*$") || !names.Add(part.Name) || part.Size<=0 || part.Size>=2147483648L || !Regex.IsMatch(part.Sha256 ?? "","^[a-f0-9]{64}$") || !Uri.TryCreate(part.Url,UriKind.Absolute,out uri) || !(uri.Scheme==Uri.UriSchemeHttps || (Testing && uri.Scheme==Uri.UriSchemeHttp && uri.IsLoopback))) throw new InvalidDataException("Invalid download part.");
+                    total=checked(total+part.Size);
+                }
+                if(total!=remote.Size) throw new InvalidDataException("Download sizes do not match.");
+            }
+            return release;
+        }
+        static EnvironmentInventory ReadInventory(ZipArchive zip,string destination)
+        {
+            var entry=zip.GetEntry("environment-files.json");
+            if(entry==null || (zip.GetEntry("environment.7z")==null && ReadRelease(zip).RemoteEnvironment==null) || zip.GetEntry("tools/7zr.exe")==null) throw new InvalidDataException("Missing compressed environment or extractor.");
+            EnvironmentInventory inventory;
+            using(var stream=entry.Open()) inventory=(EnvironmentInventory)new DataContractJsonSerializer(typeof(EnvironmentInventory)).ReadObject(stream);
+            if(inventory==null || inventory.Files==null || inventory.Files.Length==0) throw new InvalidDataException("Invalid environment inventory.");
+            var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach(var file in inventory.Files)
+            {
+                if(file==null || file.Path==null || !(file.Path.StartsWith("runtime/",StringComparison.Ordinal) || file.Path.StartsWith("models/",StringComparison.Ordinal)) || file.Size<0 || !Regex.IsMatch(file.Sha256 ?? "","^[a-f0-9]{64}$") || !seen.Add(SafePath(destination,file.Path))) throw new InvalidDataException("Invalid environment file record.");
+            }
+            return inventory;
+        }
+        static string FileHash(string path)
+        {
+            using(var input=File.OpenRead(path)) using(var sha=SHA256.Create()) return BitConverter.ToString(sha.ComputeHash(input)).Replace("-","").ToLowerInvariant();
+        }
+        static void DownloadEnvironment(Release release,string destination,Action<string> update)
+        {
+            ServicePointManager.SecurityProtocol|=SecurityProtocolType.Tls12;
+            string cache=SafePath(Path.Combine(Root,"downloads"),release.Version);Directory.CreateDirectory(cache);
+            long completed=0;
+            foreach(var part in release.RemoteEnvironment.Parts)
+            {
+                string target=SafePath(cache,part.Name);
+                if(!File.Exists(target) || new FileInfo(target).Length!=part.Size || FileHash(target)!=part.Sha256)
+                    DownloadPartFile(part,target,completed,release.RemoteEnvironment.Size,update);
+                completed+=part.Size;
+            }
+            update(UiLanguage.Text("Verifying downloaded runtime and models…","正在校验已下载的运行环境和模型…"));
+            string archive=Path.Combine(destination,"environment.7z"),temporary=archive+".partial";
+            using(var output=File.Create(temporary))
+                foreach(var part in release.RemoteEnvironment.Parts)
+                    using(var input=File.OpenRead(SafePath(cache,part.Name))) input.CopyTo(output);
+            if(new FileInfo(temporary).Length!=release.RemoteEnvironment.Size || FileHash(temporary)!=release.RemoteEnvironment.Sha256) throw new InvalidDataException(UiLanguage.Text("Downloaded archive checksum differs. Run the installer again.","下载数据校验失败，请重新运行安装器。"));
+            File.Move(temporary,archive);
+        }
+        static void DownloadPartFile(DownloadPart part,string target,long completed,long total,Action<string> update)
+        {
+            string partial=target+".partial";
+            for(int attempt=0;attempt<2;attempt++)
+            {
+                long offset=File.Exists(partial)?new FileInfo(partial).Length:0;
+                if(offset>part.Size) { File.Delete(partial);offset=0; }
+                if(offset<part.Size)
+                {
+                    var request=(HttpWebRequest)WebRequest.Create(part.Url);
+                    request.Timeout=60000;request.ReadWriteTimeout=120000;request.UserAgent="Text2Revit-Setup/1.0";
+                    if(Testing && request.RequestUri.IsLoopback) request.Proxy=null;
+                    if(offset>0) request.AddRange(offset);
+                    try
+                    {
+                        using(var response=(HttpWebResponse)request.GetResponse())
+                        {
+                            if(response.StatusCode==HttpStatusCode.OK) offset=0;
+                            else if(response.StatusCode!=HttpStatusCode.PartialContent || !Regex.IsMatch(response.Headers["Content-Range"] ?? "","^bytes "+offset+"-[0-9]+/"+part.Size+"$")) throw new InvalidDataException("Invalid partial download response.");
+                            using(var input=response.GetResponseStream()) using(var output=new FileStream(partial,offset==0?FileMode.Create:FileMode.Append,FileAccess.Write))
+                            {
+                                byte[] buffer=new byte[65536];long received=offset;var timer=Stopwatch.StartNew();
+                                int count;
+                                while((count=input.Read(buffer,0,buffer.Length))>0)
+                                {
+                                    if(received+count>part.Size) throw new InvalidDataException("Download exceeds the declared size.");
+                                    output.Write(buffer,0,count);received+=count;
+                                    if(timer.ElapsedMilliseconds>=500 || received==part.Size)
+                                    {
+                                        update(UiLanguage.Text("Downloading runtime and models: ","正在下载运行环境和模型：")+((completed+received)*100.0/total).ToString("F1")+"%\n"+part.Name);timer.Restart();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch(WebException error) { throw new IOException(UiLanguage.Text("Download failed for ","下载失败：")+part.Name+UiLanguage.Text(". Check your connection and run the installer again; downloaded data is kept.","。请检查网络后重新运行安装器，已下载的数据会保留。"),error); }
+                }
+                if(new FileInfo(partial).Length==part.Size && FileHash(partial)==part.Sha256)
+                {
+                    if(File.Exists(target)) File.Delete(target);
+                    File.Move(partial,target);return;
+                }
+                File.Delete(partial);
+            }
+            throw new InvalidDataException(UiLanguage.Text("Downloaded file checksum differs: ","下载文件校验失败：")+part.Name);
+        }
+        static void ExtractEnvironment(string destination,EnvironmentInventory inventory,Action<string> update)
+        {
+            string tool=Path.Combine(destination,"tools","7zr.exe"),archive=Path.Combine(destination,"environment.7z");
+            var expected=new HashSet<string>(inventory.Files.Select(f=>SafePath(destination,f.Path)),StringComparer.OrdinalIgnoreCase);
+            string listing=RunExtractor(tool,"l -slt -ba -sccUTF-8 "+Quote(archive),destination);
+            var listed=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach(string line in listing.Split('\n'))
+            {
+                if(line.StartsWith("Symbolic Link = ",StringComparison.Ordinal) || line.StartsWith("Hard Link = ",StringComparison.Ordinal)) throw new InvalidDataException("Links are not allowed in the packed environment.");
+                if(!line.StartsWith("Path = ",StringComparison.Ordinal)) continue;
+                string full=SafePath(destination,line.Substring(7).TrimEnd('\r'));
+                if(!expected.Contains(full) || !listed.Add(full)) throw new InvalidDataException("Unexpected file in the packed environment.");
+            }
+            if(!listed.SetEquals(expected)) throw new InvalidDataException("The packed environment does not match its inventory.");
+            RunExtractor(tool,"x "+Quote(archive)+" -o"+Quote(destination)+" -y -bsp0 -bso0",destination);
+            update(UiLanguage.Text("Verifying extracted runtime and model files…","正在校验解压后的运行环境和模型…"));
+            foreach(var file in inventory.Files)
+            {
+                string path=SafePath(destination,file.Path);
+                if(!File.Exists(path) || new FileInfo(path).Length!=file.Size || (File.GetAttributes(path)&FileAttributes.ReparsePoint)!=0) throw new InvalidDataException("Invalid extracted file: "+file.Path);
+                using(var input=File.OpenRead(path)) using(var sha=SHA256.Create())
+                    if(!string.Equals(BitConverter.ToString(sha.ComputeHash(input)).Replace("-","").ToLowerInvariant(),file.Sha256,StringComparison.Ordinal)) throw new InvalidDataException("Extracted file checksum differs: "+file.Path);
+            }
+            File.Delete(archive);
+        }
+        static string RunExtractor(string tool,string arguments,string workingDirectory)
+        {
+            var info=new ProcessStartInfo(tool,arguments) { WorkingDirectory=workingDirectory,UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8 };
+            using(var process=Process.Start(info))
+            {
+                var output=process.StandardOutput.ReadToEndAsync();var error=process.StandardError.ReadToEndAsync();
+                if(!process.WaitForExit(1800000)) { process.Kill();process.WaitForExit();throw new TimeoutException(UiLanguage.Text("Runtime extraction timed out.","运行环境解压超时。")); }
+                Task.WaitAll(output,error);
+                if(process.ExitCode!=0) throw new InvalidDataException(UiLanguage.Text("Runtime extraction failed: ","运行环境解压失败：")+error.Result);
+                return output.Result;
+            }
         }
         static void RunPython(string runtime,string arguments,string workingDirectory)
         {

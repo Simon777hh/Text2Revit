@@ -22,6 +22,10 @@ It does not replace any third-party license.
   make them subject to the Text2Revit evaluation license.
 * Autodesk Revit is a separately licensed prerequisite. API reference assemblies
   are build dependencies and are not copied into the add-in payload.
+* LZMA2 installer builds include `7zr.exe` from Igor Pavlov's public-domain
+  LZMA SDK 26.03. The original SDK notice is bundled as
+  `third_party/LZMA-SDK.txt`. Users do not need a separate 7-Zip installation.
+  [SDK and source](https://www.7-zip.org/sdk.html).
 
 Archived HouseDiffusion/DPFM experiments and their licenses remain outside this
 repository. They are not part of the current training or packaged backend.

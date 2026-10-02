@@ -1,8 +1,8 @@
 # Model checkpoints
 
 Model weights are not distributed in this source repository. The Windows
-installer includes the inference weights required by the Revit add-in, so
-installer users do not need a separate checkpoint download.
+release includes the inference weights required by the Revit add-in. The online
+installer retrieves them automatically; users do not download a separate checkpoint.
 
 For source inference or release builds, supply a compatible trained checkpoint
 at `checkpoints/flow_matching_best.pth`, or pass its path with `--checkpoint`.

@@ -30,11 +30,11 @@ A large 3-bedroom apartment with 2 bathrooms and 2 balconies.
 
 ## 在 Revit 中使用
 
-1. 关闭 Revit，运行 `Text2Revit-Setup.exe`，选择 **Install**。
+1. 从 [Windows 发行版](https://github.com/Simon777hh/Text2Revit/releases) 下载 `Text2Revit-Setup.exe`。关闭 Revit，运行安装器，选择 **Install**。
 2. 启动 Revit，打开项目平面视图，选择 **Text2Revit → Generate Model**。
 3. 输入支持的提示词，选择 **Generate**。插件创建模型并打开三维视图。
 
-Windows 安装包包含 Python、PyTorch、CLIP 和训练好的模型，无需另外安装 Python 或 Conda。推理在本地运行，兼容的 NVIDIA 显卡自动加速，同时支持 CPU 回退。安装和推理均无需下载模型。
+Windows 在线安装器自动下载并安装 Python、PyTorch、CLIP 和训练好的模型。用户只需手动下载安装 EXE，无需另外安装 Python 或 Conda。安装需要联网，之后推理在本地离线运行，兼容的 NVIDIA 显卡自动加速，同时支持 CPU 回退。完整离线安装包也可单独提供下载。
 
 界面默认英文，可在安装器和提示词窗口中选择中文。两种界面均使用相同的英文提示词格式。
 
@@ -61,7 +61,7 @@ A large 4-bedroom apartment with 2 bathrooms and 2 balconies.
 
 ## 从源码运行推理
 
-本地已验证的环境为 Windows x64、Python 3.14 和 PyTorch 2.11。源码仓库不包含模型权重。从源码推理需自行提供兼容的训练权重，放在 `checkpoints/flow_matching_best.pth`，或通过 `--checkpoint` 指定路径。Windows 安装包已包含在 Revit 中使用所需的权重。
+本地已验证的环境为 Windows x64、Python 3.14 和 PyTorch 2.11。源码仓库不包含模型权重。从源码推理需自行提供兼容的训练权重，放在 `checkpoints/flow_matching_best.pth`，或通过 `--checkpoint` 指定路径。Windows 安装器会自动提供在 Revit 中使用所需的权重。
 
 在 Python 环境中，从仓库根目录运行以下命令：
 

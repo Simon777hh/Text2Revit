@@ -4,7 +4,7 @@
 
 ## Install and use
 
-Deliver only `dist/Text2Revit-Setup.exe` to users. Close Revit, double-click the installer and click **Install**. The installer installs the add-ins, runtime and models and registers the tool automatically. Allow at least 12 GB of free disk space; the installer is approximately 3.63 GB.
+Download `Text2Revit-Setup.exe` from the Windows release, close Revit, double-click the EXE and click **Install**. The online installer automatically downloads, verifies and installs the runtime and models and registers the tool. Do not download or extract the data attachments manually. Allow at least 12 GB of free disk space. If a download is interrupted, run the installer again; validated parts are reused and partial downloads can resume. A complete offline installer performs the same installation without downloads. No separate archive utility is required.
 
 Start Revit, open a project's floor plan view and select **Text2Revit → Generate Model**. Use one of the English examples:
 
@@ -20,7 +20,7 @@ Click **Generate**. The tool runs inference and creates 3D walls, real hosted do
 
 English is the default interface. Choose **中文** in the installer or prompt dialog for Chinese. The selection is remembered; ribbon labels use that preference on the next Revit startup. Prompts remain in the supported English format in both interface languages.
 
-Users do not need to install Python, Conda or PyTorch. These dependencies and both model weights are bundled. Inference uses a compatible NVIDIA GPU automatically, with CPU fallback when CUDA is unavailable or fails. Installation and inference do not download models.
+Users do not need to install Python, Conda or PyTorch separately. The online release includes these dependencies and both model weights as data attachments that the installer retrieves automatically. Internet is required during online installation. Inference then works offline and uses a compatible NVIDIA GPU automatically, with CPU fallback when CUDA is unavailable or fails.
 
 Installation applies to the current Windows user. Other Windows accounts on the same PC install separately. Uninstall through Windows **Installed apps**; generated jobs and family caches are preserved. The current build is unsigned, so Revit can ask whether to load it on first startup. Choose **Always Load** for this tool if you intend to use it.
 

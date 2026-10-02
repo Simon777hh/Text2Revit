@@ -38,6 +38,39 @@ without optimizer state, copies the CLIP text encoder, packs Python/PyTorch,
 assembles `revit/dist/Text2Revit-Setup.exe` and verifies its appended payload hash.
 Runtime/build caches are reusable. It also writes `SHA256.txt`.
 
+By default, the original runtime and model files are compressed together into
+a solid LZMA2 archive with a 128 MiB dictionary. The installer bundles the
+public-domain LZMA SDK extractor, validates archive paths against a file
+inventory and checks each extracted file's size and SHA-256 before initializing
+Python. No user-installed archive tool is required. The intermediate runtime
+ZIP is a build cache and is expanded before LZMA2 compression. Use
+`--compression zip` for the previous ZIP-based payload format.
+
+### GitHub online installer
+
+Build the small online installer and data attachments for a specific tag:
+
+```powershell
+python revit/build_release.py --checkpoint checkpoints/flow_matching_best.pth --online-release-url https://github.com/Simon777hh/Text2Revit/releases/download/v1.0.0
+```
+
+Upload `Text2Revit-Setup.exe`, all `environment.7z.*` parts and `SHA256.txt` from
+`revit/dist/` to that release. Keep asset names and the configured tag unchanged:
+their URLs are embedded in the installer. Each data part is at most 1.5 GiB.
+Publish all assets together so the installer can retrieve its complete payload.
+
+The installer uses HTTPS and the Windows system proxy, reuses validated cached
+parts, requests byte ranges for interrupted downloads and checks per-part and
+combined SHA-256 values. Successful installation removes its download cache.
+Inference works offline after installation. Isolated `--test-root` checks also
+permit loopback HTTP for local fixtures; normal installation requires HTTPS.
+The extractor and .NET file operations support long installation paths. The
+installer regression script covers extraction, traversal rejection, integrity,
+long paths, resumed downloads and cache reuse.
+
+The first release targets Windows x64 only. No macOS or Linux installer is
+included.
+
 | Revit | Target framework |
 | --- | --- |
 | 2020 | .NET Framework 4.7 |
@@ -59,10 +92,12 @@ state and bundles only inference weights and architecture arguments, together
 with the CLIP encoder, in the installer. End users do not download weights
 separately. Git LFS is not required for the source repository.
 
-The current Windows installer is approximately 3.63 GiB. Distribute it through
-a download service that accepts its size, together with the generated
-`SHA256.txt`; link that download from the release page. Confirm the host's
-current per-file limits before publishing. See
+The complete LZMA2 offline installer is approximately 2.44 GiB, compared with
+3.63 GiB for the earlier ZIP build. The online setup executable is approximately
+3.4 MiB and downloads two data attachments of 1.50 GiB and 0.93 GiB. These can
+be hosted together in a GitHub release. Distribute the complete offline installer
+through a download service that accepts its size. Confirm the host's current
+per-file limits before publishing. See
 [GitHub's release documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
 
 ## Checks
@@ -71,6 +106,7 @@ current per-file limits before publishing. See
 python -m unittest discover -s tests -v
 python -m preprocessing.features.validate_final_training_data
 python tests/verify_opening_placement.py outputs/verification/plan.json
+python tests/verify_installer_compression.py --stub revit/Installer/bin/Release/net47/Text2Revit.Setup.exe --extractor revit/build_tools/lzma/sdk/bin/x64/7zr.exe --work-dir outputs/installer-compression-tests
 revit/dist/Text2Revit-Setup.exe --verify-only
 ```
 
