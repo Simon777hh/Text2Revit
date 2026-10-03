@@ -54,6 +54,13 @@ def run(command, **kwargs):
     print("Running", " ".join(map(str, command)), flush=True)
     subprocess.run(list(map(str, command)), check=True, **kwargs)
 
+def build_uninstaller(dotnet, env):
+    run([dotnet, "build", ROOT / "Installer/Text2Revit.Installer.csproj", "-c", "Release",
+         "-p:StandaloneUninstaller=true", "-v", "minimal"], env=env)
+    destination = DIST / "Text2Revit-Uninstall.exe"
+    shutil.copy2(ROOT / "Installer/bin/Release/net47/Text2Revit-Uninstall.exe", destination)
+    return destination
+
 def build_plugins(dotnet: Path, years, env):
     outputs = []
     for year in years:
@@ -255,6 +262,10 @@ def assemble(stub: Path, plugins, modeldir: Path, packed: Path, version: str, co
     run([final,"--verify-only"])
     digest = hashlib.file_digest(final.open("rb"),"sha256").hexdigest()
     checksums = digest + "  " + final.name + "\n"
+    uninstaller = DIST / "Text2Revit-Uninstall.exe"
+    if uninstaller.is_file():
+        with uninstaller.open("rb") as source:
+            checksums += hashlib.file_digest(source,"sha256").hexdigest()+"  "+uninstaller.name+"\n"
     if remote: checksums += "".join(part["sha256"] + "  " + part["name"] + "\n" for part in remote["parts"])
     (DIST / "SHA256.txt").write_text(checksums,encoding="utf-8")
     print(f"READY: {final}\nSize: {final.stat().st_size / 1024**3:.2f} GB",flush=True)
@@ -265,6 +276,7 @@ def main():
     parser.add_argument("--checkpoint",type=Path)
     parser.add_argument("--years",nargs="+",type=int,default=list(VERSIONS))
     parser.add_argument("--plugins-only",action="store_true")
+    parser.add_argument("--uninstaller-only",action="store_true",help="Build the standalone uninstall tool without models or runtime packaging")
     parser.add_argument("--compression", choices=("7z", "zip"), default="7z")
     parser.add_argument("--online-release-url", help="HTTPS download prefix of the GitHub release hosting the data parts")
     args = parser.parse_args()
@@ -278,9 +290,20 @@ def main():
     env["DOTNET_CLI_TELEMETRY_OPTOUT"]="1"
     env["DOTNET_CLI_UI_LANGUAGE"]="en"
     dotnet=sdk()
+    if args.uninstaller_only:
+        uninstaller=build_uninstaller(dotnet,env)
+        with uninstaller.open("rb") as source:
+            digest=hashlib.file_digest(source,"sha256").hexdigest()
+        checksums=DIST/"SHA256.txt"
+        lines=checksums.read_text(encoding="utf-8").splitlines() if checksums.exists() else []
+        lines=[line for line in lines if not line.endswith("  "+uninstaller.name)]
+        checksums.write_text("\n".join(lines+[digest+"  "+uninstaller.name])+"\n",encoding="utf-8")
+        print(f"READY: {uninstaller}",flush=True)
+        return
     plugins=build_plugins(dotnet,args.years,env)
     run([dotnet,"build",ROOT/"Installer/Text2Revit.Installer.csproj","-c","Release","-v","minimal"],env=env)
     if args.plugins_only: return
+    build_uninstaller(dotnet,env)
     candidates=[PROJECT/"checkpoints/flow_matching_best.pth"]
     checkpoint=args.checkpoint or next((p for p in candidates if p.is_file()),None)
     if checkpoint is None: raise FileNotFoundError("Supply --checkpoint with the trained Flow checkpoint")

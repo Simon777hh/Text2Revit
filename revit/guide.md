@@ -24,6 +24,15 @@ Users do not need to install Python, Conda or PyTorch separately. The online rel
 
 Installation applies to the current Windows user. Other Windows accounts on the same PC install separately. Uninstall through Windows **Installed apps**; generated jobs and family caches are preserved. The current build is unsigned, so Revit can ask whether to load it on first startup. Choose **Always Load** for this tool if you intend to use it.
 
+## Standalone uninstall tool
+
+Close all Revit windows, then double-click `Text2Revit-Uninstall.exe` and click
+**Uninstall**. Run it under the Windows account that installed Text2Revit.
+It works without the setup executable or a network connection. It removes the
+plugin, bundled runtime/models and download cache, while preserving generated
+jobs, family caches and language preferences. Windows **Installed apps** remains
+another way to uninstall. Once removal starts, wait for it to finish.
+
 ## Generated dimensions
 
 | Element | Rule |

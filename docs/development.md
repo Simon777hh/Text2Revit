@@ -17,6 +17,13 @@ The installer copies the runtime/models/add-ins into the current user's local
 application data, writes version-specific `.addin` registrations and adds an
 uninstaller. End users do not place C# source or DLLs manually.
 
+The release also includes `Text2Revit-Uninstall.exe`, a standalone uninstall
+tool that opens directly in uninstall mode without an installation payload or
+command-line arguments. Close Revit, run it under the Windows account that
+installed Text2Revit, and click Uninstall. It removes product releases, owned
+Revit registrations, download caches and the Windows uninstall registration;
+generated jobs, family caches and preferences are preserved.
+
 ## Build
 
 From the repository root:
@@ -32,6 +39,16 @@ Python environment to bundle. Packaging needs a Windows Conda environment and
 Conda tooling; Conda is only a developer dependency. First builds download the
 .NET SDK, API reference packages and packing tools into ignored `revit/build_tools`.
 `REVIT2022_API_DIR` (and equivalent years) selects locally installed API files.
+
+Build only the small standalone uninstall tool, without packaging models or
+the Python runtime:
+
+```powershell
+python revit/build_release.py --uninstaller-only
+```
+
+This writes `revit/dist/Text2Revit-Uninstall.exe` and updates its entry in
+`SHA256.txt`. Full release builds include this tool too.
 
 The builder compiles Revit 2020–2026 plugins, exports the author's checkpoint
 without optimizer state, copies the CLIP text encoder, packs Python/PyTorch,
@@ -58,6 +75,7 @@ Upload `Text2Revit-Setup.exe`, all `environment.7z.*` parts and `SHA256.txt` fro
 `revit/dist/` to that release. Keep asset names and the configured tag unchanged:
 their URLs are embedded in the installer. Each data part is at most 1.5 GiB.
 Publish all assets together so the installer can retrieve its complete payload.
+Also upload `Text2Revit-Uninstall.exe` to offer standalone removal.
 
 The installer uses HTTPS and the Windows system proxy, reuses validated cached
 parts, requests byte ranges for interrupted downloads and checks per-part and
@@ -115,6 +133,7 @@ python -m preprocessing.features.validate_final_training_data
 python tests/verify_opening_placement.py outputs/verification/plan.json
 python tests/verify_installer_compression.py --stub revit/Installer/bin/Release/net47/Text2Revit.Setup.exe --extractor revit/build_tools/lzma/sdk/bin/x64/7zr.exe --work-dir outputs/installer-compression-tests
 python tests/verify_installer_cancellation.py --stub revit/Installer/bin/Release/net47/Text2Revit.Setup.exe --work-dir outputs/installer-cancellation-tests
+python tests/verify_uninstaller.py --tool revit/dist/Text2Revit-Uninstall.exe --work-dir outputs/uninstaller-tests
 revit/dist/Text2Revit-Setup.exe --verify-only
 ```
 

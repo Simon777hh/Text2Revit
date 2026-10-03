@@ -70,7 +70,11 @@ namespace Text2Revit.Installer
             {
                 if (args.Length==2 && (args[0]=="--test-root" || args[0]=="--test-uninstall")) { Testing=true; Root=Path.GetFullPath(args[1]); Addins=Path.Combine(Root,"test-addins"); if(args[0]=="--test-uninstall") Uninstall(s=>Console.WriteLine(s),false); else Install(s=>Console.WriteLine(s),false); return; }
                 if (args.Contains("--verify-only")) { using (var stream=Payload()) using (var zip=new ZipArchive(stream,ZipArchiveMode.Read)) { var release=ReadRelease(zip); foreach (var e in zip.Entries) SafePath(Root,e.FullName); if(release.EnvironmentFormat=="7z") ReadInventory(zip,Root); } return; }
-                bool uninstall=args.Contains("--uninstall");
+#if STANDALONE_UNINSTALLER
+                bool uninstall=true;
+#else
+                bool uninstall=args.Contains("--uninstall") || string.Equals(Path.GetFileNameWithoutExtension(Application.ExecutablePath),"Uninstall",StringComparison.OrdinalIgnoreCase);
+#endif
                 using (var form=new Form { Text=uninstall ? UiLanguage.Text("Uninstall Text2Revit","卸载 Text2Revit") : UiLanguage.Text("Install Text2Revit","安装 Text2Revit"),ClientSize=new Size(600,300),StartPosition=FormStartPosition.CenterScreen,
                     FormBorderStyle=FormBorderStyle.FixedDialog,MaximizeBox=false,Font=new Font("Segoe UI",10) })
                 {
@@ -196,7 +200,7 @@ namespace Text2Revit.Installer
             }
             string releases=Path.Combine(Root,"releases");
             if (Directory.Exists(releases)) foreach (string folder in Directory.GetDirectories(releases)) DeleteOwned(folder,releases);
-            if(register) Registry.CurrentUser.DeleteSubKeyTree(RegistryPath,false);
+            if(register && !Testing) Registry.CurrentUser.DeleteSubKeyTree(RegistryPath,false);
             string downloads=Path.Combine(Root,"downloads");
             if(Directory.Exists(downloads)) foreach(string folder in Directory.GetDirectories(downloads)) DeleteOwned(folder,downloads);
         }
