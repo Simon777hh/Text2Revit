@@ -64,6 +64,13 @@ parts, requests byte ranges for interrupted downloads and checks per-part and
 combined SHA-256 values. Successful installation removes its download cache.
 Inference works offline after installation. Isolated `--test-root` checks also
 permit loopback HTTP for local fixtures; normal installation requires HTTPS.
+During installation, Cancel or the window close button requests cancellation.
+Setup interrupts downloads, stops the active extractor or Python process, and
+removes the incomplete release before allowing the window to close. Download
+cache files remain available for a later retry. File copying and verification
+also check cancellation. Final add-in and uninstaller registration is a short
+commit step after the cancellable checks; once committed, setup completes.
+Uninstallation must finish once started.
 The extractor and .NET file operations support long installation paths. The
 installer regression script covers extraction, traversal rejection, integrity,
 long paths, resumed downloads and cache reuse.
@@ -107,6 +114,7 @@ python -m unittest discover -s tests -v
 python -m preprocessing.features.validate_final_training_data
 python tests/verify_opening_placement.py outputs/verification/plan.json
 python tests/verify_installer_compression.py --stub revit/Installer/bin/Release/net47/Text2Revit.Setup.exe --extractor revit/build_tools/lzma/sdk/bin/x64/7zr.exe --work-dir outputs/installer-compression-tests
+python tests/verify_installer_cancellation.py --stub revit/Installer/bin/Release/net47/Text2Revit.Setup.exe --work-dir outputs/installer-cancellation-tests
 revit/dist/Text2Revit-Setup.exe --verify-only
 ```
 
@@ -115,3 +123,8 @@ all windows avoid the continuous entrance facade, and bedrooms connected to
 balconies have no window. Unit tests cover collinear split walls, different
 parallel walls, balcony access, minimum areas and wall-footprint subtraction.
 No automated test is claimed to establish architectural code compliance.
+
+The Windows cancellation probe drives the actual setup form with a stalled
+loopback download and an isolated installation root. It checks both Cancel and
+window close, release rollback, preserved download cache, and termination of
+extractor/Python child processes. Use a fresh work directory for each run.
