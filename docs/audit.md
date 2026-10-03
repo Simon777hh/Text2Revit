@@ -2,8 +2,26 @@
 
 Audit date: 2026-10-02. The publication directory is `final`; the parent workspace
 contains local assets and preserved historical work and is not the upload root.
+Public release download verification: 2026-10-03.
+ResPlan source pipeline consolidation: 2026-10-03.
+RPLAN and feature pipeline consolidation: 2026-10-03.
 
 ## Fixed
+
+* ResPlan preparation now has one raw-to-filtered-canvas entry point. Separate
+  clean/rebuild/filter dataset versions and the extra canvas CLI were removed.
+  Corner extraction and wall reconstruction are retained as internal modules.
+  GT, prompt preparation and RPLAN scaling use the same final ResPlan file;
+  recorded transforms recover source units in memory for source-scale rules.
+* `data/` now documents all six retained statistical/configuration files and
+  distinguishes them from locally generated training datasets and model weights.
+* RPLAN conversion, filtering and CLIP area calibration now use one entry and
+  one prepared file. Its source geometry stays unchanged, and a recorded area
+  multiplier replaces separate CLIP scaling files. Topology now applies the
+  bedroom edge policy before saving. Attention masks and next-corner mapping
+  are generated in one GT pass. Six redundant public stage scripts were removed.
+  Two unused mask builders were removed from raw extraction; training attention
+  builders now reside in `prepare_attention.py`.
 
 * All room windows exclude the entrance's continuous exterior facade, including
   collinear split segments. Separate parallel facades remain eligible. Bedrooms
@@ -49,7 +67,11 @@ contains local assets and preserved historical work and is not the upload root.
 | --- | --- |
 | Geometry/opening/area regressions | 22 tests passed |
 | Prepared GT, topology, masks, mapping, CLIP | All 75,379 rows verified |
-| ResPlan clean → rebuild → filter | Two real source plans retained through all stages |
+| ResPlan raw → filtered canvas | Two real source plans match the prior four-stage output; GT, topology, masks and IDs also match |
+| ResPlan canvas/data contract | Eight regression checks passed |
+| RPLAN and feature consolidation | 30 prepared source plans retained the same 23 IDs; GT, topology, masks, mapping and prompts matched the former stages exactly |
+| Consolidated preprocessing contracts | Eight additional tests passed; 38 unit tests passed in total |
+| Raw RPLAN PNG entry | Two conversions matched the former converter; parallel execution, rejection reports and CLI guards passed. Both samples were rejected by the retained filter |
 | Real packaged-runtime GPU inference | Passed with the corrected sample seed |
 | Native Revit 2022 construction and exports | Nine rooms, real doors/windows, open railings and room/total area notes |
 | Entrance facade / balcony bedroom / spacing checks | Accepted JSON passed |
@@ -59,6 +81,7 @@ contains local assets and preserved historical work and is not the upload root.
 | Full online installation using local download fixtures | Production setup code and data installed successfully; Python/PyTorch/model health check and seven isolated add-in registrations passed |
 | Runtime CPU / NVIDIA checks | CPU and GPU health checks passed using the same packaged runtime/model files |
 | Release attachments | Setup EXE and both data parts verified against SHA256.txt; all four assets below 2 GiB |
+| Published GitHub v1.0.0 | All four server-reported hashes and sizes match local assets; setup/checksum HTTPS downloads and both data parts' byte-range responses verified |
 | Git publication | Source repository excludes weights and installers; inference weights supplied by release data |
 
 `sample/floorplan.png`, `sample/model3d.png`, `sample/plan.json` and
@@ -101,8 +124,11 @@ parent Git history, original supplied checkpoint or unique dataset was deleted.
   unverified. Binaries are unsigned.
 * The online install trial used a loopback HTTP fixture in isolated test mode,
   with the production executable code and full data attachments unchanged.
-  Normal installation requires HTTPS. Public GitHub download and redirect
-  behavior must be checked after the release attachments are published.
+  Normal installation requires HTTPS. The public setup and checksum downloads,
+  HTTPS redirects and both data parts' range responses were checked after
+  publication. A complete installation downloading all data from GitHub still
+  requires an end-to-end user trial; the remote data parts were sampled rather
+  than downloaded again in full.
 * NuGet's online vulnerability feed was unavailable during compilation
   (`NU1900` warnings). Successful builds do not establish a clean dependency
   vulnerability audit.

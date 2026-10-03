@@ -1,17 +1,24 @@
 """Check the self-extracting installer against the repository's current source."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import struct
-import sys
 import zipfile
 import re
 from pathlib import Path, PurePosixPath
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "revit"))
-from build_release import BACKEND_FILES, DATA_FILES, VERSIONS
+release_spec = importlib.util.spec_from_file_location(
+    "text2revit_build_release", ROOT / "revit" / "build_release.py")
+if release_spec is None or release_spec.loader is None:
+    raise ImportError("Cannot load revit/build_release.py")
+release_builder = importlib.util.module_from_spec(release_spec)
+release_spec.loader.exec_module(release_builder)
+BACKEND_FILES = release_builder.BACKEND_FILES
+DATA_FILES = release_builder.DATA_FILES
+VERSIONS = release_builder.VERSIONS
 
 
 def verify(path):

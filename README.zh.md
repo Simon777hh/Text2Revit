@@ -79,6 +79,7 @@ python pipeline_generate.py --prompt "A 3-bedroom apartment with 2 bathrooms and
 | --- | --- |
 | `preprocessing/resplan/`、`preprocessing/rplan/` | 数据清洗、墙体重建、过滤和坐标准备 |
 | `preprocessing/features/` | GT、拓扑、提示词、mask、边映射、CLIP 特征及验证 |
+| `data/` | 小型统计先验和几何配置，见 [文件说明](data/README.zh.md) |
 | `model.py`、`train.py`、`losses.py` | 模型结构与 Flow Matching 训练 |
 | `pipeline_generate.py`、`backend_cli.py` | 推理与结果输出 |
 | `geometry_cleanup.py`、`plan_quality.py`、`door_window_rules.py`、`revit_geometry.py` | 几何修复、面积检查、门窗布置和构件尺寸 |
@@ -86,6 +87,17 @@ python pipeline_generate.py --prompt "A 3-bedroom apartment with 2 bathrooms and
 | `sample/`、`tests/`、`docs/` | 示例、回归检查和文档 |
 
 训练数据集需另行获取。[数据流程](docs/data_pipeline.md) 介绍数据准备和验证；[开发指南](docs/development.md) 介绍 C# 实现、安装包构建和检查命令；[验证报告](docs/audit.md) 记录已验证行为及尚存局限。
+
+按照数据说明放好原始输入后，依次运行：
+
+```powershell
+python -m preprocessing.resplan.prepare_resplan
+python -m preprocessing.rplan.prepare_rplan
+python -m preprocessing.features.prepare_all_data
+```
+
+两种数据集各自只输出一个最终数据文件和检查报告。训练数据命令生成 GT、
+过滤后的拓扑、提示词、注意力数据和 CLIP 特征，最后验证它们的对应关系。
 
 ## 许可
 

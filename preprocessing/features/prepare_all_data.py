@@ -20,10 +20,8 @@ SCRIPTS = [
     "extract_raw_data.py",
     "prepare_plan_data.py",
     "prepare_topology_gt.py",
-    "remove_bedroom_edges.py",
     "prepare_prompts.py",
-    "build_masks.py",
-    "build_edge_mapping.py",
+    "prepare_attention.py",
     "encode_clip.py",
     "validate_final_training_data.py",
 ]

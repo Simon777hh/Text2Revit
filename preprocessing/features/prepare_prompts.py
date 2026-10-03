@@ -37,12 +37,15 @@ from data_utils import (
 )
 
 
+from preprocessing.resplan.prepare_resplan import source_coordinates
+from preprocessing.rplan.prepare_rplan import clip_area_plan
+
 DEFAULT_RPLAN_PKL = (
-    PROJECT_ROOT / "RPLAN" / "rplan_resplan_style_cleaned.pkl"
+    PROJECT_ROOT / "RPLAN" / "RPLAN_filtered.pkl"
 )
-DEFAULT_RESPLAN_PKL = PROJECT_ROOT / "ResPlan" / "ResPlan_filtered.pkl"
+DEFAULT_RESPLAN_PKL = PROJECT_ROOT / "ResPlan" / "ResPlan_filtered_canvas.pkl"
 DEFAULT_CLIP_RPLAN_PKL = (
-    PROJECT_ROOT / "RPLAN" / "rplan_resplan_style_scaled_canvas.pkl"
+    PROJECT_ROOT / "RPLAN" / "RPLAN_filtered.pkl"
 )
 DEFAULT_CLIP_RESPLAN_PKL = (
     PROJECT_ROOT / "ResPlan" / "ResPlan_filtered_canvas.pkl"
@@ -440,8 +443,11 @@ def main() -> None:
             continue
         with open(source_path, "rb") as handle:
             plans = pickle.load(handle)
-        with open(clip_path, "rb") as handle:
-            clip_plans = pickle.load(handle)
+        if Path(source_path).resolve() == Path(clip_path).resolve():
+            clip_plans = plans
+        else:
+            with open(clip_path, "rb") as handle:
+                clip_plans = pickle.load(handle)
         for position in tqdm(
             source_positions,
             desc=f"building prompts {source_name}",
@@ -449,11 +455,15 @@ def main() -> None:
             manifest_row = manifest[position]
             source_index = int(manifest_row["source_idx"])
             plan = plans[source_index]
+            if source_name == "resplan":
+                plan = source_coordinates(plan)
             if int(plan.get("id", -1)) != int(manifest_row["source_id"]):
                 raise ValueError(
                     f"manifest/source id mismatch at combined index {position}"
                 )
             clip_plan = clip_plans[source_index]
+            if source_name == "rplan":
+                clip_plan = clip_area_plan(clip_plan)
             if int(clip_plan.get("id", -1)) != int(
                 manifest_row["source_id"]
             ):

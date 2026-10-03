@@ -79,6 +79,7 @@ The setup script downloads the CLIP text encoder once. Inference loads `checkpoi
 | --- | --- |
 | `preprocessing/resplan/`, `preprocessing/rplan/` | Dataset cleaning, wall reconstruction, filtering and coordinate preparation |
 | `preprocessing/features/` | Ground truth, topology, prompts, masks, edge mapping, CLIP embeddings and validation |
+| `data/` | Small statistical priors and geometry settings; see the [file guide](data/README.md) |
 | `model.py`, `train.py`, `losses.py` | Model architecture and Flow Matching training |
 | `pipeline_generate.py`, `backend_cli.py` | Inference and output generation |
 | `geometry_cleanup.py`, `plan_quality.py`, `door_window_rules.py`, `revit_geometry.py` | Geometry repair, area checks, opening placement and physical dimensions |
@@ -86,6 +87,18 @@ The setup script downloads the CLIP text encoder once. Inference loads `checkpoi
 | `sample/`, `tests/`, `docs/` | Examples, regression checks and documentation |
 
 Training datasets are obtained separately. The [data pipeline](docs/data_pipeline.md) describes preparation and validation; the [development guide](docs/development.md) covers the C# implementation, installer builds and verification commands. The [validation report](docs/audit.md) records tested behavior and remaining limitations.
+
+After placing the raw inputs at the paths described in the data guide, run:
+
+```powershell
+python -m preprocessing.resplan.prepare_resplan
+python -m preprocessing.rplan.prepare_rplan
+python -m preprocessing.features.prepare_all_data
+```
+
+Each dataset preparation command writes one final dataset and a report. The
+training-data command builds GT, filtered topology, prompts, attention data and
+CLIP embeddings, then validates their alignment.
 
 ## License
 

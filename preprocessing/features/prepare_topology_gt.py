@@ -24,6 +24,30 @@ from data_utils import (
 )
 
 
+from preprocessing.features.extract_raw_data import laplacian_pe, random_walk_pe
+
+
+def remove_bedroom_connections(data):
+    """Filter conditioning edges and refresh positional encodings in memory."""
+    adjacency = data["adjacency"]
+    removed = np.zeros(len(adjacency), dtype=np.int64)
+    edge_lists = np.empty(len(adjacency), dtype=object)
+    for index, current in enumerate(adjacency):
+        bedrooms = data["valid_mask"][index] & (data["node_type_ids"][index] == 2)
+        forbidden = bedrooms[:, None] & bedrooms[None, :]
+        removed[index] = np.triu(current & forbidden, k=1).sum()
+        current[forbidden] = 0
+        rows, cols = np.nonzero(np.triu(current, k=1))
+        edge_lists[index] = list(zip(rows.tolist(), cols.tolist()))
+        data["num_edges"][index] = len(rows)
+        if removed[index]:
+            data["features"][index, :, 29:] = np.concatenate(
+                [random_walk_pe(current.astype(np.float32)),
+                 laplacian_pe(current.astype(np.float32))], axis=1)
+    data["edge_lists"] = edge_lists
+    return removed
+
+
 ROOM_TYPE_NAMES = [
     "living",
     "kitchen",
@@ -82,7 +106,6 @@ def build_topology_gt(
         valid_mask
     ].argmax(axis=-1).astype(np.int8)
 
-    expected_adjacency = np.zeros_like(adjacency, dtype=bool)
     invalid_edges = 0
     for plan_index in range(len(features)):
         valid = valid_mask[plan_index]
@@ -108,14 +131,13 @@ def build_topology_gt(
             raise ValueError(
                 f"plan {plan_index} num_edges mismatch"
             )
-        expected_adjacency[plan_index] = current
 
     if invalid_edges:
         raise ValueError(
             f"{invalid_edges} plans contain edges to padding nodes"
         )
 
-    return {
+    data = {
         "features": features,
         "valid_mask": valid_mask,
         "node_type_ids": node_type_ids,
@@ -125,6 +147,8 @@ def build_topology_gt(
         "num_edges": num_edges,
         "plan_ids": plan_ids,
     }
+    remove_bedroom_connections(data)
+    return data
 
 
 def summarize_by_source(
@@ -180,6 +204,7 @@ def main() -> None:
         raise ValueError("manifest and topology counts do not match")
 
     data = build_topology_gt(topology, edges)
+    removed_by_plan = edges["num_edges"] - data["num_edges"]
     sources = np.asarray(
         [row["source"] for row in plan_order],
         dtype="<U16",
@@ -195,6 +220,8 @@ def main() -> None:
         "max_nodes": int(data["features"].shape[1]),
         "room_type_order": ROOM_TYPE_NAMES,
         "sources": summarize_by_source(data, sources),
+        "removed_bedroom_edges": int(removed_by_plan.sum()),
+        "plans_with_removed_edges": int(np.count_nonzero(removed_by_plan)),
         "outputs": {
             "topology_gt": str(output_path.resolve()),
         },

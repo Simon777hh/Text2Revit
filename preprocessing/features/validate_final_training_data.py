@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from data_utils import DATA_DIR, ROOM_START, ROOM_END
 from mmap_cache import load_cached
-from preprocessing.features.build_edge_mapping import build_mapping
+from preprocessing.features.prepare_attention import build_mapping
 
 
 def check(name, actual, expected):

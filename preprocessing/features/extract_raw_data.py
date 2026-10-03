@@ -34,9 +34,11 @@ from data_utils import (
 
 
 DEFAULT_RPLAN_PKL = (
-    PROJECT_ROOT / "RPLAN" / "rplan_resplan_style_cleaned.pkl"
+    PROJECT_ROOT / "RPLAN" / "RPLAN_filtered.pkl"
 )
-DEFAULT_RESPLAN_PKL = PROJECT_ROOT / "ResPlan" / "ResPlan_filtered.pkl"
+DEFAULT_RESPLAN_PKL = PROJECT_ROOT / "ResPlan" / "ResPlan_filtered_canvas.pkl"
+
+from preprocessing.resplan.prepare_resplan import source_coordinates
 
 NUM_ROOMS = 20
 NUM_TYPES = 9
@@ -360,36 +362,6 @@ def build_topology_features(
     return features, valid_mask, num_rooms
 
 
-def build_corner_masks(
-    features: np.ndarray,
-    adjacency: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    room_onehot = features[:, 4:24]
-    valid = room_onehot.sum(axis=1) > 0.5
-    room_ids = room_onehot.argmax(axis=1)
-    valid_pair = valid[:, None] & valid[None, :]
-    same_room = room_ids[:, None] == room_ids[None, :]
-    connected_room = (
-        adjacency[room_ids[:, None], room_ids[None, :]] > 0.5
-    )
-    corner_global = valid_pair
-    corner_room = valid_pair & same_room
-    corner_conn = valid_pair & (same_room | connected_room)
-    return corner_global, corner_room, corner_conn
-
-
-def build_node_masks(
-    valid_mask: np.ndarray,
-    adjacency: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    node_global = valid_mask[:, None] & valid_mask[None, :]
-    self_loop = np.eye(NUM_ROOMS, dtype=bool)
-    node_conn = node_global & (
-        (adjacency > 0.5) | self_loop
-    )
-    return node_global, node_conn
-
-
 def extract_source(
     source_name: str,
     plans: list[dict[str, Any]],
@@ -412,6 +384,8 @@ def extract_source(
     for source_index, plan in enumerate(
         tqdm(plans, desc=f"extracting {source_name}")
     ):
+        if source_name == "resplan":
+            plan = source_coordinates(plan)
         conn = plan.get("conn") or {}
         result = extract_corner_features(plan)
         if result is None:
