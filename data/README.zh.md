@@ -9,13 +9,23 @@
 | --- | --- |
 | `combined_area_stats_natural.json` | canvas 房间及总面积分位数，用于训练提示词的大中小标签 |
 | `corner_count_distributions.json` | 房间角点数量分布，用于拓扑条件采样 |
-| `geometry_policy.json` | 厨房和卫生间最低面积，单位 m² |
+| `geometry_policy.json` | 推理输出面积倍率，以及厨房和卫生间最低净面积（m²） |
 | `raw_recovery_scale_stats.json` | 坐标到米的尺度恢复及几何统计 |
 | `room_aspect_ranges.json` | 几何恢复时使用的房间长宽比范围 |
 | `room_aspect_samples.npz` | 几何恢复时使用的房间长宽比样本 |
 
 安装包包含后五项推理文件；第一项用于生成训练提示词。六项都有当前调用方，
 需要保留。修改它们可能改变生成户型或训练标签。
+
+推理输出的面积校准由 `geometry_policy.json` 的 `output_area_multipliers`
+控制：small=1.15、medium=1.15、large=1.20。线性尺寸乘倍率的平方根，
+通过 `pixel_to_meter` 应用于预览、物理尺寸检查与 Revit 导入。原始数据统计、
+训练张量和模型权重不因此改动。墙厚保持外墙 400 mm、内墙 200 mm，
+因此净使用面积的增加不严格等于多边形面积倍率。
+
+面积估算口径为所有功能房间的净面积总和，含阳台、扣除墙体占地；
+最终面积以生成几何和 Revit 房间测量为准。校准与数据抽样说明见
+[`docs/area_scale_calibration.md`](../docs/area_scale_calibration.md)。
 
 本地准备数据时也会使用这个目录，但大文件不进入 Git：
 

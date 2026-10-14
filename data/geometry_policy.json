@@ -1,4 +1,9 @@
 {
+  "output_area_multipliers": {
+    "small": 1.15,
+    "medium": 1.15,
+    "large": 1.20
+  },
   "minimum_room_areas_m2": {
     "kitchen": 2.0,
     "bathroom": 2.0

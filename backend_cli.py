@@ -18,22 +18,13 @@ if str(FLOW_ROOT) not in sys.path:
 import pipeline_generate as pipeline  # noqa: E402
 from pipeline_generate import generate_plan_data  # noqa: E402
 from revit_geometry import build_revit_geometry
-from plan_quality import validate_room_areas
+from plan_quality import load_physical_scale, validate_room_areas
 
 MAX_GENERATION_ATTEMPTS = 10
 
 
-def default_pixel_to_meter():
-    path = FLOW_ROOT / "data" / "raw_recovery_scale_stats.json"
-    try:
-        stats = json.loads(path.read_text(encoding="utf-8"))
-        return float(
-            stats["resplan_meter_scale"]["meters_per_raw_pixel"][
-                "median"
-            ]
-        )
-    except Exception:
-        return 0.05
+def default_pixel_to_meter(size="medium"):
+    return load_physical_scale(size)["pixel_to_meter"]
 
 
 def flatten_openings(door_window_rules):
@@ -130,9 +121,10 @@ def main():
             # Repair diagnostics flag target shared-wall lengths, not missing doors.
             # The original placement code can fit a shorter door on such a wall.
             validate_door_connections(metadata["rooms"], openings, metadata["edge_lists"])
+            pixel_to_meter = metadata["pixel_to_meter"]
             walls, railings = build_revit_geometry(metadata["rooms"], openings,
-                default_pixel_to_meter(), metadata["seed"])
-            room_areas_m2 = validate_room_areas(metadata["rooms"], default_pixel_to_meter(), walls=walls)
+                pixel_to_meter, metadata["seed"])
+            room_areas_m2 = validate_room_areas(metadata["rooms"], pixel_to_meter, walls=walls)
             break
         except ValueError as error:
             last_error = error
@@ -146,7 +138,7 @@ def main():
     response = {
         "schema_version": "1.0",
         "coordinate_system": "raw_canvas_px",
-        "pixel_to_meter": default_pixel_to_meter(),
+        "pixel_to_meter": pixel_to_meter,
         "seed": metadata["seed"],
         "prompt": prompt,
         "clip_prompt": metadata["clip_prompt"],

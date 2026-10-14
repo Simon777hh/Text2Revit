@@ -48,6 +48,7 @@ from door_window_rules import (
     build_door_window_pieces,
 )
 from model import FlowMatchingPlanTransformer
+from plan_quality import load_physical_scale
 from restore_canvas_aspect import (
     fit_records_to_canvas,
     load_room_aspect_stats,
@@ -515,8 +516,9 @@ def generate_plan_data(prompt, seed_override=None):
         restore_info["fit"] = fit_records_to_canvas(processed)
         restore_info["canvas"] = place_records_on_canvas(processed)
     from geometry_cleanup import clean_thin_geometry
-    scale_stats = json.loads((FLOW_ROOT / "data" / "raw_recovery_scale_stats.json").read_text(encoding="utf-8"))
-    pixel_to_meter = float(scale_stats["resplan_meter_scale"]["meters_per_raw_pixel"]["median"])
+    physical_scale = load_physical_scale(requested_size)
+    pixel_to_meter = physical_scale["pixel_to_meter"]
+    restore_info["physical_scale"] = physical_scale
     restore_info["thin_geometry"] = clean_thin_geometry(processed, pixel_to_meter)
     unfit_after = postprocess.unfit_connected_edges(
         processed,
@@ -572,6 +574,7 @@ def generate_plan_data(prompt, seed_override=None):
         "prompt_size": topology.counts.size,
         "area_size_source": size_source,
         "requested_size": requested_size,
+        "pixel_to_meter": pixel_to_meter,
         "room_count": int(topology.valid_mask.sum()),
         "corner_counts": {
             str(key): int(value)
@@ -615,7 +618,7 @@ def main():
     if args.clip_dir:
         os.environ["TEXT2REVIT_CLIP_DIR"] = str(args.clip_dir)
     INFERENCE_STEPS, SEED = args.steps, args.seed
-    from backend_cli import default_pixel_to_meter, flatten_openings, validate_door_connections
+    from backend_cli import flatten_openings, validate_door_connections
     from revit_geometry import build_revit_geometry
     from plan_quality import validate_room_areas
     seed = args.seed
@@ -625,8 +628,8 @@ def main():
             openings = flatten_openings(overlays)
             validate_door_connections(metadata["rooms"], openings, metadata["edge_lists"])
             walls, _ = build_revit_geometry(metadata["rooms"], openings,
-                                            default_pixel_to_meter(), metadata["seed"])
-            areas = validate_room_areas(metadata["rooms"], default_pixel_to_meter(), walls=walls)
+                                            metadata["pixel_to_meter"], metadata["seed"])
+            areas = validate_room_areas(metadata["rooms"], metadata["pixel_to_meter"], walls=walls)
             break
         except ValueError as error:
             if attempt == 9:

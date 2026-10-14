@@ -10,14 +10,19 @@ plans, training tensors or model weights.
 | --- | --- | --- |
 | `combined_area_stats_natural.json` | Canvas room/total-area quantiles for small, medium and large training prompt labels | `preprocessing/features/prepare_prompts.py` |
 | `corner_count_distributions.json` | Room corner-count distributions for sampled topology conditions | `topology_rules.py` |
-| `geometry_policy.json` | Minimum kitchen and bathroom areas in m² | `plan_quality.py` |
-| `raw_recovery_scale_stats.json` | Coordinate-to-metre recovery and layout geometry statistics | `backend_cli.py`, `pipeline_generate.py` |
+| `geometry_policy.json` | Deployment area multipliers and minimum kitchen/bathroom clear areas in m² | `plan_quality.py` |
+| `raw_recovery_scale_stats.json` | Measured reference coordinate-to-metre scale and layout geometry statistics | `plan_quality.py` |
 | `room_aspect_ranges.json` | Room aspect-ratio ranges used during geometry recovery | `restore_canvas_aspect.py` |
 | `room_aspect_samples.npz` | Room aspect-ratio samples used during geometry recovery | `restore_canvas_aspect.py` |
 
 The installer bundles the five inference files; the area quantile file is used
 for training prompt preparation. All six have current callers and are retained.
 Changing these files can change generated layouts or training labels.
+
+Deployment polygon-area multipliers are small=1.15, medium=1.15 and large=1.20.
+Their square roots scale lengths through `pixel_to_meter`; physical walls remain
+400/200 mm thick, so clear area must be measured after subtracting their footprints.
+See [area calibration](../docs/area_scale_calibration.md) for estimates and limits.
 
 Local preparation uses the same directory:
 

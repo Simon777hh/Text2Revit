@@ -1,5 +1,6 @@
-"""Physical minimum-area checks for generated rooms."""
+"""Deployment physical scale and clear-floor-area checks for generated rooms."""
 import json
+import math
 from pathlib import Path
 
 from shapely.geometry import LineString, Polygon
@@ -12,6 +13,39 @@ DEFAULT_MIN_AREAS_M2 = {
 
 class PlanQualityError(ValueError):
     """A generated layout must be retried instead of imported into Revit."""
+
+
+def load_physical_scale(size="medium", data_dir=None):
+    """Apply deployment area calibration without altering measured dataset stats.
+
+    Multipliers describe polygon area, so lengths change by their square root.
+    Clear floor area must still subtract the unchanged physical wall widths.
+    """
+    if size not in {"small", "medium", "large"}:
+        raise ValueError("Physical size must be small, medium or large")
+    data_dir = Path(data_dir) if data_dir is not None else Path(__file__).resolve().parent / "data"
+    statistics_path = data_dir / "raw_recovery_scale_stats.json"
+    reference = 0.05
+    if statistics_path.is_file():
+        statistics = json.loads(statistics_path.read_text(encoding="utf-8"))
+        reference = float(statistics["resplan_meter_scale"]["meters_per_raw_pixel"]["median"])
+    policy_path = data_dir / "geometry_policy.json"
+    multiplier = 1.0
+    if policy_path.is_file():
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+        multiplier = float(policy.get("output_area_multipliers", {}).get(size, 1.0))
+    if not math.isfinite(reference) or reference <= 0:
+        raise ValueError("Reference metre scale must be finite and positive")
+    if not math.isfinite(multiplier) or multiplier <= 0:
+        raise ValueError("Output area multiplier must be finite and positive")
+    linear = math.sqrt(multiplier)
+    return {
+        "size": size,
+        "reference_pixel_to_meter": reference,
+        "output_area_multiplier": multiplier,
+        "output_length_multiplier": linear,
+        "pixel_to_meter": reference * linear,
+    }
 
 
 def load_min_areas():
